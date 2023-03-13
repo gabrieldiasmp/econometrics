@@ -8,12 +8,8 @@ lapply(names(sessionInfo()$otherPkgs), function(pkgs)
     unload = T,
     force = T
   ))
-library(kableExtra)
 library(tidyverse)
 library(fpp3)
-
-
-## --------------------------------------------------------------------------------------------
 library(tidyquant)
 
 
@@ -31,12 +27,25 @@ stock <- tidyquant::tq_get(c("^GSPC","^N225","^IXIC","^NYA"),
   group_by_key() %>% 
   mutate(trading_day = row_number()) 
 
-
-## --------------------------------------------------------------------------------------------
 stock %>% select(symbol,date,close,rtn)
 
+stock %>% 
+  update_tsibble(index = trading_day) %>% 
+  model(AR = ARIMA(rtn~1+pdq(5,0,0))) %>% 
+  augment() %>% 
+  features(.resid,list(T = length, 
+                    ~stat_arch_lm(.,lag = 10)))%>% 
+  mutate(stat_arch_lm = T*stat_arch_lm, 
+         pval_arch_lm = 1-pchisq(stat_arch_lm, df = 10)) ###lagrange multiplier test
 
-## ----echo=TRUE, results='hide',message=FALSE-------------------------------------------------
+## Box-pierce test
+stock %>% 
+  update_tsibble(index = trading_day) %>% 
+  model(AR = ARIMA(rtn~1+pdq(5,0,0))) %>% 
+  augment() %>% 
+  features(.resid^2,list( 
+                    ~box_pierce(.,lag = 10, dof = 5))) 
+
 IXICrtn <- stock %>% 
   filter(symbol == "NASDAQ") %>% 
   filter(!is.na(rtn)) %>% 
@@ -51,8 +60,6 @@ spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH",
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ---- echo=FALSE-----------------------------------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                             garchOrder=c(11,0)),
                           mean.model=list(armaOrder=c(2,0), 
@@ -60,8 +67,6 @@ spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH",
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ----echo=TRUE, results='hide',message=FALSE-------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                             garchOrder=c(1,1)),
                           mean.model=list(armaOrder=c(2,0), 
@@ -69,24 +74,18 @@ spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH",
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ---- echo=FALSE-----------------------------------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                             garchOrder=c(1,1)),
                           mean.model=list(armaOrder=c(2,0), 
                                           include.mean=TRUE))
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ----echo=TRUE, results='hide',message=FALSE-------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                              garchOrder=c(2,1)),
                         mean.model=list(armaOrder=c(1,0), 
                                         include.mean=TRUE))
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ---- echo=FALSE-----------------------------------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                              garchOrder=c(2,1)),
                         mean.model=list(armaOrder=c(1,0), 
@@ -94,25 +93,17 @@ spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH",
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ---- out.width="90%",  fig.align='center'---------------------------------------------------
 fit <- rugarch::ugarchfit(data = IXICrtn, spec = spec)
 fit@fit$z %>% ts() %>% as_tsibble() %>% 
   ACF(lag_max = 20) %>% autoplot()
 
-
-## ---- out.width="90%",  fig.align='center'---------------------------------------------------
 fit <- rugarch::ugarchfit(data = IXICrtn, spec = spec)
 fit@fit$z^2 %>% ts() %>% as_tsibble() %>% 
   ACF(lag_max = 20) %>% autoplot()
 
-
-## ---- out.width="100%",  fig.align='center'--------------------------------------------------
 qqnorm(fit@fit$z,main="",col="red")
 qqline(fit@fit$z,col="blue")
 
-
-## ----echo=TRUE, results='hide',message=FALSE-------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                              garchOrder=c(2,1)),
                     mean.model=list(armaOrder=c(1,0), 
@@ -120,8 +111,6 @@ spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH",
 fit <- rugarch::ugarchfit(data = IXICrtn, spec = spec)
 rugarch::ugarchforecast(fit,n.ahead = 10)
 
-
-## ----echo=TRUE, results='hide',message=FALSE-------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                              garchOrder=c(2,1)),
                     mean.model=list(armaOrder=c(1,0), 
@@ -131,8 +120,6 @@ fit <- rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
 rugarch::ugarchforecast(fit,n.ahead = 10)
 
-
-## ----echo=TRUE, results='hide',message=FALSE-------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                                                  garchOrder=c(2,1)),
                              mean.model=list(armaOrder=c(1,0), 
@@ -152,8 +139,6 @@ tibble(index = 1:(length(rec_forc)),
   pivot_longer(-index) %>% 
   autoplot() 
 
-
-## ----echo = FALSE, out.width="110%",  fig.align='center'-------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                                                  garchOrder=c(2,1)),
                              mean.model=list(armaOrder=c(1,0), 
@@ -175,8 +160,6 @@ tibble(index = 1:(length(rec_forc)),
   pivot_longer(-index) %>% 
   autoplot() 
 
-
-## ----echo=TRUE, results='hide',message=FALSE-------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                                                  garchOrder=c(2,1)),
                              mean.model=list(armaOrder=c(1,0),
@@ -185,8 +168,6 @@ spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH",
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ----echo = FALSE----------------------------------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                                                  garchOrder=c(2,1)),
                              mean.model=list(armaOrder=c(1,0),
@@ -195,8 +176,6 @@ spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH",
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ----echo=TRUE, results='hide',message=FALSE-------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                                                  garchOrder=c(1,1)),
                              mean.model=list(armaOrder=c(1,0),
@@ -205,8 +184,6 @@ spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH",
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ----echo=FALSE------------------------------------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH", 
                                                  garchOrder=c(1,1)),
                              mean.model=list(armaOrder=c(1,0),
@@ -215,8 +192,6 @@ spec <-  rugarch::ugarchspec(variance.model=list(model="sGARCH",
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ----echo=TRUE, results='hide',message=FALSE-------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="gjrGARCH", 
                                                  garchOrder=c(1,1)),
                              mean.model=list(armaOrder=c(1,0),
@@ -224,16 +199,12 @@ spec <-  rugarch::ugarchspec(variance.model=list(model="gjrGARCH",
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ----echo=FALSE------------------------------------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="gjrGARCH", 
                                                  garchOrder=c(1,1)),
                              mean.model=list(armaOrder=c(1,0), include.mean=TRUE))
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ----echo=TRUE, results='hide',message=FALSE-------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="eGARCH", 
                                                  garchOrder=c(1,1)),
                              mean.model=list(armaOrder=c(1,0), 
@@ -241,11 +212,8 @@ spec <-  rugarch::ugarchspec(variance.model=list(model="eGARCH",
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
 
-
-## ----echo=FALSE------------------------------------------------------------------------------
 spec <-  rugarch::ugarchspec(variance.model=list(model="eGARCH", garchOrder=c(1,1)),
                              mean.model=list(armaOrder=c(1,0), 
                                              include.mean=TRUE))
 
 rugarch::ugarchfit(data = IXICrtn, spec = spec)
-
